@@ -10,7 +10,7 @@
                                     :password :env/clojars_password
                                     :sign-releases true}]]
 
-  :dependencies [[org.clojure/clojure "1.10.3" :scope "provided"]
+  :dependencies [[org.clojure/clojure "1.11.1" :scope "provided"]
                  [io.prometheus/simpleclient "0.12.0"]
                  [io.prometheus/simpleclient_common "0.12.0"]
                  [io.prometheus/simpleclient_pushgateway "0.12.0"]

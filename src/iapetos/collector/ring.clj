@@ -151,7 +151,7 @@
    the necessary collectors.
 
    Be aware that you should implement `path-fn` (which generates the value for
-   the `:path` label) if you have any kind of ID in your URIs – since otherwise
+                                                 the `:path` label) if you have any kind of ID in your URIs – since otherwise
    there will be one timeseries created for each observed ID.
 
    For additional labels in the metrics use `label-fn`, which takes the request
@@ -202,7 +202,7 @@
    the necessary collectors.
 
    Be aware that you should implement `path-fn` (which generates the value for
-   the `:path` label) if you have any kind of ID in your URIs – since otherwise
+                                                 the `:path` label) if you have any kind of ID in your URIs – since otherwise
    there will be one timeseries created for each observed ID.
 
    For additional labels in the metrics use `label-fn`, which takes the request
@@ -220,3 +220,24 @@
   (-> handler
       (wrap-instrumentation registry options)
       (wrap-metrics-expose registry options)))
+
+;; ### Metrics Interceptor
+
+(defn metrics-interceptor
+  "Interceptor for instrumenting routes with prometheus RED metrics."
+  [registry]
+  {:name ::metrics
+   :enter (fn [ctx]
+            (assoc ctx ::metrics-start-time (System/nanoTime) ::metrics-options {:registry registry
+                                                                                 :path-fn  :uri
+                                                                                 :label-fn (constantly {})}))
+   :leave (fn [{::keys [metrics-start-time metrics-options] :keys [response] :as ctx}]
+            (let [delta (- (System/nanoTime) metrics-start-time)]
+              (->> (ensure-response-map response nil)
+                   (record-metrics! metrics-options delta (:request ctx)))
+              ctx))
+   :error (fn [{::keys [metrics-start-time metrics-options] :keys [request response] :as ctx}]
+            (let [delta (- (System/nanoTime) metrics-start-time)]
+              (->> (ensure-response-map response nil))
+              (exception-counter-for metrics-options request))
+            ctx)})
