@@ -225,19 +225,20 @@
 
 (defn metrics-interceptor
   "Interceptor for instrumenting routes with prometheus RED metrics."
-  [registry]
+  [registry & [{:keys [exception-status]}]]
   {:name ::metrics
    :enter (fn [ctx]
             (assoc ctx ::metrics-start-time (System/nanoTime) ::metrics-options {:registry registry
                                                                                  :path-fn  :uri
                                                                                  :label-fn (constantly {})}))
-   :leave (fn [{::keys [metrics-start-time metrics-options] :keys [response] :as ctx}]
+   :leave (fn [{::keys [metrics-start-time metrics-options] :keys [response request] :as ctx}]
             (let [delta (- (System/nanoTime) metrics-start-time)]
-              (->> (ensure-response-map response nil)
-                   (record-metrics! metrics-options delta (:request ctx)))
+              (->> (ensure-response-map response exception-status)
+                   (record-metrics! metrics-options delta request))
               ctx))
    :error (fn [{::keys [metrics-start-time metrics-options] :keys [request response] :as ctx}]
             (let [delta (- (System/nanoTime) metrics-start-time)]
-              (->> (ensure-response-map response nil))
+              (->> (ensure-response-map response exception-status)
+                   (record-metrics! metrics-options delta request))
               (exception-counter-for metrics-options request))
             ctx)})
