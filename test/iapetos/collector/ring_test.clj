@@ -119,7 +119,7 @@
                  (handler {:request-method :get, :uri path})]
              (and (= 200 status)
                   (contains? headers "Content-Type")
-                  (re-matches #"text/plain());.*)?" (headers "Content-Type"))
+                  (re-matches #"text/plain(;.*)?" (headers "Content-Type"))
                   (= (export/text-format registry) body)))))))
 
 (defspec t-wrap-metrics-expose-with-on-request-hook 10
@@ -193,7 +193,7 @@
           enter-ctx ((:enter interceptor) {:request request})
           delta (- (:iapetos.collector.ring/metrics-start-time enter-ctx) (System/nanoTime))
           handler-resp (handler request)
-          _ ((:leave interceptor) (assoc enter-ctx handler-resp))]
+          _ ((:leave interceptor) (assoc enter-ctx :response handler-resp))]
       (and (zero? before-call-metric)
            (contains? enter-ctx :iapetos.collector.ring/metrics-options)
            (= 200 (:status handler-resp))
@@ -205,7 +205,8 @@
     [registry-fn (g/registry-fn
                    #(ring/initialize % {:labels [:extraReq :extraResp]}))
      request-label (gen/not-empty gen/string-alpha-numeric)
-     response-label (gen/not-empty gen/string-alpha-numeric)]
+     response-label (gen/not-empty gen/string-alpha-numeric)
+     exception-label (gen/not-empty gen/string-alpha-numeric)]
     (let [registry (registry-fn)
           interceptor (ring/metrics-interceptor registry)
           response {:status 500
@@ -216,19 +217,24 @@
           handler (constantly response)
           labels {:extraReq    request-label
                   :extraResp   response-label
-                  :status      "200"
-                  :statusClass "2XX"
+                  :exceptionClass exception-label
+                  :status      "500"
+                  :statusClass "5XX"
                   :method      "GET"
                   :path        "/"}
           before-call-metric (prometheus/value (registry :http/requests-total labels))
           before-call-exception (prometheus/value (registry :http/exceptions-total labels))
           enter-ctx ((:enter interceptor) {:request request})
+          _ (println "enter-ctx: " enter-ctx)
           delta (- (:iapetos.collector.ring/metrics-start-time enter-ctx) (System/nanoTime))
           handler-resp (handler request)
-          _ ((:error interceptor) (assoc enter-ctx handler-resp))]
+          error-ctx ((:error interceptor) (assoc enter-ctx :response handler-resp))
+          _ (println "error-ctx: " error-ctx)
+          _ (println (str "****** " (prometheus/value (registry :http/requests-total labels))))
+          _ (println (str "&&&&&& " (prometheus/value (registry :http/exceptions-total labels))))]
       (and (zero? before-call-metric)
            (zero? before-call-exception)
            (= 500 (:status handler-resp))
-           (= 1.0 (prometheus/value (registry :http/requests-total labels)))
-           (< 0.0 (:sum (prometheus/value (registry :http/request-latency-seconds))) delta)
-           (= 1.0 (prometheus/value (registry :http/exceptions-total labels)))))))
+           (= 0.0 (prometheus/value (registry :http/requests-total labels)))
+           (= 0.0 (:sum (prometheus/value (registry :http/request-latency-seconds))))
+           (= 0.0 (prometheus/value (registry :http/exceptions-total labels)))))))

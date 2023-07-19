@@ -113,6 +113,11 @@
                            {:status      (status response)
                             :statusClass (status-class response)}
                            (labels-for options request response))
+        _ (println "registry: " registry)
+        _ (println "request: " request)
+        _ (println "response: " response)
+        _ (println "delta:" delta)
+        _ (println "labels:" labels)
         delta-in-seconds (/ delta 1e9)]
     (-> registry
         (prometheus/inc     :http/requests-total labels)
@@ -233,6 +238,7 @@
                                                                                  :label-fn (constantly {})}))
    :leave (fn [{::keys [metrics-start-time metrics-options] :keys [response request] :as ctx}]
             (let [delta (- (System/nanoTime) metrics-start-time)]
+              (println "ensure-response-map: " (ensure-response-map response exception-status))
               (->> (ensure-response-map response exception-status)
                    (record-metrics! metrics-options delta request))
               ctx))
@@ -240,5 +246,5 @@
             (let [delta (- (System/nanoTime) metrics-start-time)]
               (->> (ensure-response-map response exception-status)
                    (record-metrics! metrics-options delta request))
-              (exception-counter-for metrics-options request))
-            ctx)})
+              (exception-counter-for metrics-options request)
+              ctx))})
